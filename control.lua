@@ -38,6 +38,13 @@ local function format_number(input)
 end
 
 
+local function format_percentage(input)
+	-- It's tempting to use util.format_number but the map doesn't show
+	-- percentages with separating commas when hovering over fluids.
+	return math.floor(input) .. "%"
+end
+
+
 -- lua global
 local englishMissingSpamGuard = {}
 
@@ -291,7 +298,12 @@ local function updateMapTags(surface, force, chunkPosition, resource)
 		loggedMissingResources[resourceIcon] = true
 	end
 
-	local text = format_number(total)
+	local text
+	if global[_ICON_TYPES_][resourceIcon] == "fluid" then
+		text = format_percentage(total / 3000)
+	else
+		text = format_number(total)
+	end
 
 	local append_raw_to_tag = settings.global["resourcemarker-include-raw-resource-name-in-tags"].value
 
