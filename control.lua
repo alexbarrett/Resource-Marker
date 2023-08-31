@@ -24,18 +24,17 @@ local function table_length(tb)
 end
 
 
+-- Very similar to util.format_number but uses different unit suffixes to match
+-- the label shown when hovering over resources on the in-game map.
 local function format_number(input)
-	local number = util.format_number(input, true)
-
-	if string.match(number, "%d%d%d.%d[a-zA-Z]") then
-		number = number:sub(1, 3) .. number:sub(6)
-
-	elseif string.match(number, "[2-9]%d.%d[a-zA-Z]") then
-		number = number:sub(1, 2) .. number:sub(5)
-
+	local units = { [0] = "",  "k", "M", "G", "T", "P" }
+	local i = math.min(#units, math.floor(math.log(input, 1000)))
+	local n = input / 1000^i
+	if i > 0 and n < 10 then
+		return string.format("%.1f", math.floor(n * 10) / 10) .. units[i]
+	else
+		return math.floor(n) .. units[i]
 	end
-
-	return number
 end
 
 
