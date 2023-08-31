@@ -1,8 +1,4 @@
 -- Kizrak
-local util = require("util")
-
-local english = require('english')
-
 local sb = serpent.block
 
 --- TODO: time for a library soon...
@@ -45,35 +41,18 @@ local function format_percentage(input)
 end
 
 
--- lua global
-local englishMissingSpamGuard = {}
-
-local function getI18N(resource)
-	local i18n = english[resource]
-	if not i18n and not englishMissingSpamGuard[resource] then
-		local msg = "The english.lua table missing `" .. resource .. "`"
-		log(msg)
-		-- game.print(msg)
-		englishMissingSpamGuard[resource] = true
-	end
-	local localResource = i18n or resource
-	return localResource
-end
-
-
 local function getResourceCounts(resources)
 	local resourcesFound = {}
 
 	for _, resource in pairs(resources) do
 		local name = resource.name
-		local localName = getI18N(name)
 		local amount = resource.initial_amount or resource.amount
 
-		if not resourcesFound[localName] then
-			resourcesFound[localName] = 0
+		if not resourcesFound[name] then
+			resourcesFound[name] = 0
 		end
 
-		resourcesFound[localName] = amount + resourcesFound[localName]
+		resourcesFound[name] = amount + resourcesFound[name]
 	end
 
 	return resourcesFound
@@ -242,6 +221,7 @@ local calculateIconTypes
 local _ICON_TYPES_ = "iconTypes" -- global root key
 local loggedMissingResources = {}
 local lastLoggedTagCount = {}
+local pendingMarkerTranslations = {}
 
 local function updateMapTags(surface, force, chunkPosition, resource)
 	local flood = floodNearbyChartedChunks(surface, force, chunkPosition, resource)
@@ -298,22 +278,38 @@ local function updateMapTags(surface, force, chunkPosition, resource)
 		loggedMissingResources[resourceIcon] = true
 	end
 
-	local text
+	local amount
 	if global[_ICON_TYPES_][resourceIcon] == "fluid" then
-		text = format_percentage(total / 3000)
+		amount = format_percentage(total / 3000)
 	else
-		text = format_number(total)
+		amount = format_number(total)
 	end
 
-	local append_raw_to_tag = settings.global["resourcemarker-include-raw-resource-name-in-tags"].value
-
-	if append_raw_to_tag then
-		text = resource .. " " .. text -- identical to base game build-in tooltips
+	local translationStr = {"entity-name." .. resource}
+	local resourcePrototype = game.entity_prototypes[resource]
+	if resourcePrototype and resourcePrototype.localised_name then
+		translationStr = resourcePrototype.localised_name
 	end
 
-	local tagData = {position = position, text = text, icon = signalID}
+	local translationId = game.get_player(1).request_translation(translationStr)
+	pendingMarkerTranslations[translationId] = {
+		position = position,
+		surface = surface,
+		force = force,
+		resource = resource,
+		icon = signalID,
+		amount = amount,
+		flood = flood
+	}
+end
 
-	local tag = force.add_chart_tag(surface, tagData)
+
+local function update_chart_tag(surface, force, resource, position, icon, text, flood)
+	local tag = force.add_chart_tag(surface, {
+		position = position,
+		text = text,
+		icon = icon,
+	})
 
 	if not tag then
 		local warning = "Warning: NIL TAG: resource:" .. resource .. "   total:" .. total .. "   x:" .. position.x .. "   y:" .. position.y
@@ -339,6 +335,25 @@ local function updateMapTags(surface, force, chunkPosition, resource)
 		lastLoggedTagCount[lltcKey] = tagCount
 	end
 end
+
+
+local function _on_string_translated(event)
+	if pendingMarkerTranslations[event.id] == nil then
+		return
+	end
+
+	local data = pendingMarkerTranslations[event.id]
+	local text = data.amount
+
+	local append_raw_to_tag = settings.global["resourcemarker-include-raw-resource-name-in-tags"].value
+	if append_raw_to_tag then
+		text = event.result .. " " .. text
+	end
+
+	update_chart_tag(data.surface, data.force, data.resource, data.position, data.icon, text, data.flood)
+	pendingMarkerTranslations[event.id] = nil
+end
+script.on_event(defines.events.on_string_translated, _on_string_translated)
 
 
 local function _on_chunk_charted(surface, force, chunkPosition, area)
@@ -443,7 +458,6 @@ function calculateIconTypes()
 		for _, product in pairs(products) do
 			if global[_ICON_TYPES_][product.name] then
 				global.aliases[name] = product.name
-				global.aliases[getI18N(name)] = product.name
 			end
 		end
 	end
@@ -549,8 +563,11 @@ local function _get_ore_name(tag)
 	local text = tag.text
 	local tag_length = string.len(text) -- find length of tag name
 	local cutoff, _ = string.find(string.reverse(text), " ", 1, true) -- find index of the last space
-	local tag_ore_name = string.sub(text, 1, tag_length - cutoff)
+	if cutoff == nil then
+		return
+	end
 
+	local tag_ore_name = string.sub(text, 1, tag_length - cutoff)
 	return tag_ore_name
 end
 
@@ -581,8 +598,8 @@ local function clear_map_tags_and_data(event, tag_exceptions)
 	for _, surface in pairs(game.surfaces) do
 		for _, force in pairs(game.forces) do
 			for _, tag in pairs(force.find_chart_tags(surface)) do
-				local tag_ore_name = _get_ore_name(tag):lower()
-				if tag_exceptions[tag_ore_name] == nil then
+				local tag_ore_name = _get_ore_name(tag)
+				if tag_ore_name == nil or tag_exceptions[tag_ore_name:lower()] == nil then
 					tag.destroy()
 				end
 			end
@@ -689,8 +706,6 @@ end
 
 
 commands.add_command("resourcemarker", "Enter `/resourcemarker help` for more details.", unifiedCommandHandler)
-
-log("english:\n" .. sbs(english))
 
 -- /c t=game.forces[1].find_chart_tags(game.surfaces[1] ) game.print( #t )
 -- /c t=game.forces[1].find_chart_tags(game.surfaces[1] ) for _,i in pairs(t) do i.destroy() end
