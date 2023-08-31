@@ -57,7 +57,7 @@ end
 
 local function getResourceCounts(resources)
 	local resourcesFound = {}
-
+	local lookup = {}
 	for _, resource in pairs(resources) do
 		local name = resource.name
 		local localName = getI18N(name)
@@ -66,8 +66,11 @@ local function getResourceCounts(resources)
 		if not resourcesFound[localName] then
 			resourcesFound[localName] = 0
 		end
-
-		resourcesFound[localName] = amount + resourcesFound[localName]
+		local identifier = tostring(resource.bounding_box.left_top.x) .. "-" tostring(resource.bounding_box.left_top.y) 
+		if not lookup[identifier] then
+			resourcesFound[localName] = amount + resourcesFound[localName]
+			lookup[identifier] = true
+		end
 	end
 
 	return resourcesFound
