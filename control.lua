@@ -122,7 +122,14 @@ local function _on_chunk_generated(surface, area)
 	local arrayOfLuaEntity = surface.find_entities_filtered {area = area, type = "resource"}
 
 	if table_size(arrayOfLuaEntity) > 0 then
-		local resourcesFound = getResourceCounts(arrayOfLuaEntity)
+		local filteredEntities = {}
+		for _, resource in pairs(arrayOfLuaEntity) do
+			local rx, ry = getXY(resource.bounding_box)
+			if rx == x and ry == y then
+				table.insert(filteredEntities, resource)
+			end
+		end
+		local resourcesFound = getResourceCounts(filteredEntities)
 
 		updateGlobalResourceMapForTile(surface, x, y, resourcesFound)
 
