@@ -66,7 +66,7 @@ local function getResourceCounts(resources)
 		if not resourcesFound[localName] then
 			resourcesFound[localName] = 0
 		end
-		local identifier = tostring(resource.bounding_box.left_top.x) .. "-" tostring(resource.bounding_box.left_top.y) 
+		local identifier = tostring(resource.bounding_box.left_top.x) .. "-" .. tostring(resource.bounding_box.left_top.y) 
 		if not lookup[identifier] then
 			resourcesFound[localName] = amount + resourcesFound[localName]
 			lookup[identifier] = true
